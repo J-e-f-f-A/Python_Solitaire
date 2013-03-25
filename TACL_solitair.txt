@@ -1,0 +1,1177 @@
+?tacl routine
+{ SOLITAIR written by Jeff Artz                                                       }
+{                     http://mysite.verizon.net/~jartz/tandem/jeffartz/solitair.html  }
+{                     Jeff.Artz@gmail.com                                             }
+[#case [#exception]
+ |_call |
+  #history /clearlast/    == hide the evidence of playing...
+  #frame
+
+  ===================================================================
+  === The following code was inserted to allow 'standalone' execution
+  === of this routine without my 'standard' subroutines.
+  === Normally these routines are in a shared segment file.
+
+  { define the 'ascii' routine }
+  [#def ASCII routine
+   |body|
+    #frame
+    #push y
+    [#def w^a delta
+     |body|
+      Qy$ I HXy$
+    ]
+    [#if [#argument /value y/ number]]
+    sink [#delta /commands w^a/]
+    #result [y]
+    #unframe
+  ]
+  ================================================================================
+  ==  Various macros to control Tandem 65xx Terminal:                           ==
+  ================================================================================
+  ==---------------------------------------------------------------------------==
+  [#def T6530:ESC macro |body| [ASCII 27]]
+  ==---------------------------------------------------------------------------==
+  [#def T6530:UP  macro |body| [T6530:ESC]A]
+  ==---------------------------------------------------------------------------==
+  [#def T6530:END macro |body| [T6530:ESC]F]
+  ==---------------------------------------------------------------------------==
+  [#def T6530:HOME routine |body| #result [T6530:ESC]H]
+  ==---------------------------------------------------------------------------==
+  [#def T6530:CLEND      routine |body| #result [T6530:ESC]J]
+  [#def T6530:CLLINE     routine |body| #result [T6530:ESC]K]
+  [#def T6530:CLS        routine |body| #result [T6530:HOME][T6530:CLEND]]
+  [#def T6530:ROLLUP     routine |body| #result [T6530:ESC]S]
+  [#def T6530:ROLLDOWN   routine |body| #result [T6530:ESC]T]
+  [#def T6530:PAGEUP     routine |body| #result [T6530:ESC]V]
+  [#def T6530:PAGEDOWN   routine |body| #result [T6530:ESC]U]
+  [#def T6530:STATUSLINE routine |body| #result [T6530:ESC]o]
+  [#def T6530:KBLOCK     routine |body| #result [T6530:ESC]c]
+  [#def T6530:KBUNLOCK   routine |body| #result [T6530:ESC]b]
+  [#def T6530:LF         macro |body| [ASCII 10]]
+  [#def T6530:CR         macro |body| [ASCII 13]]
+  [#def T6530:PRINTERON  macro |body| [T6530:ESC]-O]
+  [#def T6530:PRINTEROFF macro |body| [ASCII 18]]
+  [#def T6530:FORMFEED   macro |body| [ASCII 12]]
+  [#def T6530:PRINT      macro
+   |body|
+    ==============================================================================
+    ==  T6530:PRINT "<text>"                                                     ==
+    ==  Prints <text>                                                           ==
+    ==============================================================================
+    #outputv %*%
+  ]
+  ==-------------------------------------------------------------------------- ==
+  [#def T6530:PRINTAT    routine
+   |body|
+    ==============================================================================
+    ==  T6530:PRINTAT <x>,<y> "<text>"                                           ==
+    ==  Prints <text> at Column <x>,Row <y>.                                    ==
+    ==============================================================================
+    #push X Y TEXT
+    #if [#argument /value X/ number]
+    #if [#argument comma ]
+    #if [#argument /value Y/ number]
+    #if [#argument /value TEXT/ text]
+    [#case [X]
+     |1|
+      #setv X " "
+     |3|
+      #set X [ASCII 34]
+     |otherwise|
+      #setv X "[ASCII [#compute [X] + 31]]"
+    ]
+    [#CASE [Y]
+     |1|
+      #setv Y " "
+      |3|
+      #set Y [ASCII 34]
+     |otherwise|
+      #setv Y "[ASCII [#compute [Y] + 31]]"
+    ]
+    #setv TEXT "[ASCII 19]" '+' Y '+' X '+' [TEXT]
+    #outputv TEXT
+    #pop  X Y TEXT
+  ]
+  [#def T6530:INPUTAT routine
+   |body|
+    ==============================================================================
+    ==  T6530:INPUTAT <x>,<y> <data_var> "<prompt>"                              ==
+    ==  Prints the prompt text at Column <x>,Row <y> and then prompts for input ==
+    ==  Input is returned in <data_var>.                                        ==
+    ==============================================================================
+    #push X Y IVAR TEXT
+    #if [#argument /value X   / number]
+    #if [#argument comma ]
+    #if [#argument /value Y   / number]
+    #if [#argument /value IVAR/ word  ]
+    #if [#argument /value TEXT/ text  ]
+    [#case [X]
+     |1|
+      #setv X " "
+     |3|
+      #set X [ASCII 34]
+     |otherwise|
+      #setv X "[ASCII [#compute [X] + 31]]"
+    ]
+    [#case [Y]
+     |1|
+      #setv Y " "
+     |3|
+      #set Y [ASCII 34]
+     |otherwise|
+      #setv Y "[ASCII [#compute [Y] + 31]]"
+    ]
+    #setv TEXT "[ASCII 19]" '+' Y '+' X '+' [TEXT]
+    #inputv [IVAR] "[TEXT]"
+    #pop  X Y IVAR TEXT
+  ]
+  ==-------------------------------------------------------------------------- ==
+  [#def T6530:LOCATE routine
+   |body|
+    ===============================================================================
+    ==  T6530:LOCATE <x>,<y>                                                      ==
+    ==  Moves the cursor to Column <x> Row <y> on a Tandem 65xx series terminal. ==
+    ===============================================================================
+    #push X Y
+    #if [#argument /value X   / number]
+    #if [#argument comma ]
+    #if [#argument /value Y   / number]
+    [#case [X]
+     |1|
+      #setv X " "
+     |3|
+      #set X [ASCII 34]
+     |otherwise|
+      #setv X "[ASCII [#compute [X] + 31]]"
+    ]
+    [#case [Y]
+     |1|
+      #setv Y " "
+     |3|
+      #set Y [ASCII 34]
+     |otherwise|
+      #setv Y "[ASCII [#compute [Y] + 31]]"
+    ]
+    #outputv /hold/ "[ASCII 19]" '+' Y '+' X
+    #pop  X Y
+  ]
+  ==---------------------------------------------------------------------------==
+  { When used in terminal output, causes the terminal to beep.                  }
+  [#def T6530:BEEP macro |body| [ASCII 7]]
+  ==---------------------------------------------------------------------------==
+  ================================================================================
+  ==  Various macros to change video attributes on a Tandem 65xx Terminal:      ==
+  ================================================================================
+  { Video Attributes:            Itnsty  Blink/Ital  Reverse  Underline      }
+  [#def T6530:NRM           macro { HIGH    NO          NO       NO           }
+   |body|[ASCII 27]6@]
+  [#def T6530:NRMLOW        macro { LOW     NO          NO       NO           }
+   |body|[ASCII 27]6A]
+  [#def T6530:NRMBLI        macro { HIGH    YES         NO       NO           }
+   |body|[ASCII 27]6B]
+  [#def T6530:NRMLOWBLI     macro { LOW     YES         NO       NO           }
+   |body|[ASCII 27]6C]
+  [#def T6530:INV           macro { HIGH    NO          YES      NO           }
+   |body|[ASCII 27]6D]
+  [#def T6530:INVLOW        macro { LOW     NO          YES      NO           }
+   |body|[ASCII 27]6E]
+  [#def T6530:INVBLI        macro { HIGH    YES         YES      NO           }
+   |body|[ASCII 27]6F]
+  [#def T6530:INVLOWBLI     macro { LOW     YES         YES      NO           }
+   |body|[ASCII 27]6G]
+  [#def T6530:UND           macro { HIGH    NO          NO       YES          }
+   |body|[ASCII 27]6P]
+  [#def T6530:UNDLOW        macro { LOW     NO          NO       YES          }
+   |body|[ASCII 27]6Q]
+  [#def T6530:UNDBLI        macro { HIGH    YES         NO       YES          }
+   |body|[ASCII 27]6R]
+  [#def T6530:UNDLOWBLI     macro { LOW     YES         NO       YES          }
+   |body|[ASCII 27]6S]
+  [#def T6530:UNDINV        macro { HIGH    NO          YES      YES          }
+   |body|[ASCII 27]6T]
+  [#def T6530:UNDINVLOW     macro { LOW     NO          YES      YES          }
+   |body|[ASCII 27]6U]
+  [#def T6530:UNDINVBLI     macro { HIGH    YES         YES      YES          }
+   |body|[ASCII 27]6V]
+  [#def T6530:UNDINVLOWBLI  macro { LOW     YES         YES      YES          }
+   |body|[ASCII 27]6W]
+  ==---------------------------------------------------------------------------==
+  === Again, the above code was inserted to allow 'standalone' execution
+  === of this routine without my 'standard' subroutines.
+  === Normally these routines are in a shared segment file.
+  ===================================================================
+  { Set the colors on the terminal... One drawback - Underline mode is turned off... }
+  #outputv "[T6530:ESC]-0;1;32q0F07CF47F028FC740F074F7FF080FC7C09084F7FF080CF7C0F084F7FF080FC7C"
+  { There are only 16 colors / / / / / / / / /\              / / / / / / / / /\              /}
+  { to pick from.  The 1st   |N|N|N|N|I|I|I|I| \_INVISIBLE__/|U|U|U|U|U|U|U|U| \_INVISIBLE__/ }
+  { character is the BG; the |R|R|R|R|N|N|N|N| (SET THE SAME |N|N|N|N|N|N|N|N| (SET THE SAME  }
+  { 2nd is the letter color. |M|M|M|M|V|V|V|V|  AS THE PREV  |D|D|D|D|D|D|D|D|  AS THE PREV   }
+  { Color Codes:             | |L|B|L| |L|B|L|  8 ATTRIBUTES)| |L|B|L|I|I|I|I|  8 ATTRIBUTES) }
+  {  0-BLK        8-DK GREY  | |O|L|O| |O|L|O|               | |O|L|O|N|N|N|N|                }
+  {  1-DK BLUE    9-BLUE     | |W|I|W| |W|I|W|               | |W|I|W|V|V|V|V|                }
+  {  2-DK GREEN   A-GREEN    | | | |B| | | |B|  UNDerline    | | | |B| |L|B|L|                }
+  {  3-DK CYAN    B-CYAN     | | | |L| | | |L|   attributes  | | | |L| |O|L|O|                }
+  {  4-DK RED     C-RED      | | | |I| | | |I|   are usually | | | |I| |W|I|W|                }
+  {  5-DK VIOLET  D-VIOLET                       the same as the normal    |B|                }
+  {  6-DK YELLOW  E-YELLOW                       attributes, but are       |L|                }
+  {  7-LT GREY    F-WHITE                        underlined as well.       |I|                }
+
+  #output /hold/ [T6530:CLS]
+  #push SUIT0 SUIT1 SUIT2 SUIT3 FACE0 FACE1 FACE2 FACE3 FACE4 FACE5 FACE6
+  #push FACE7 FACE8 FACE9 FACE10 FACE11 FACE12 HL GAMEOVER DECKCARD FROM TEMP
+  #push SHUFFLE_COUNTER SHUFFLE_WITH SHUFFLE_TEMP FLIPCOUNT COLSEARCH OLDFROM
+  #push SUITCHECK FACECHECK FKEY ACTION COLNUM OLDCOLNUM DPNUM HLSUIT
+  #push FROMVAR FROMLOC FROMFACE FROMSUIT TOFACE TOSUIT TACLCMD TACLDONE
+  #push TO TOVAR TOLOC TODESTVAR TODESTLOC SHOUR SMINS SSECS FHOUR FMINS FSECS
+  #push CARD_COUNTER CARD_SUIT CARD_FACE   DHOUR DMINS DSECS DTOTSECS STOTSECS
+  #push COLCOUNT ROWCOUNT PICKCOUNT        FTOTSECS
+  #push FROMCOLNUM FROMCOLVAR FROMCOUNT TOCOLNUM TOCOLVAR TOCOUNT
+  #push COLOR:NORMAL COLOR:RED COLOR:BLACK COLOR:BACK COLOR:ERROR COLOR:INSTX
+
+  == SET THE DEFAULT COLORS:
+  #set  COLOR:BACK   6   ==   T6530:INVLOW
+  #set  COLOR:ERROR  3   ==   T6530:NRMBLI
+  #set  COLOR:INSTX  2   ==   T6530:NRMLOW
+  #set  COLOR:RED    7   ==   T6530:INVBLI
+  #set  COLOR:BLACK  5   ==   T6530:INV
+  #set  COLOR:NORMAL 1   ==   T6530:NRM
+
+  #push COLOR1 COLOR2 COLOR3 COLOR4 COLOR5 COLOR6 COLOR7 COLOR8 COLOR9 COLOR10
+  #push COLOR11 COLOR12 COLOR13 COLOR14 COLOR15 COLOR16
+  #setv COLOR1       T6530:NRM
+  #setv COLOR2       T6530:NRMLOW
+  #setv COLOR3       T6530:NRMBLI
+  #setv COLOR4       T6530:NRMLOWBLI
+  #setv COLOR5       T6530:INV
+  #setv COLOR6       T6530:INVLOW
+  #setv COLOR7       T6530:INVBLI
+  #setv COLOR8       T6530:INVLOWBLI
+  #setv COLOR9       T6530:UND
+  #setv COLOR10      T6530:UNDLOW
+  #setv COLOR11      T6530:UNDBLI
+  #setv COLOR12      T6530:UNDLOWBLI
+  #setv COLOR13      T6530:UNDINV
+  #setv COLOR14      T6530:UNDINVLOW
+  #setv COLOR15      T6530:UNDINVBLI
+  #setv COLOR16      T6530:UNDINVLOWBLI
+
+  #push #helpkey
+  #set #helpkey
+  #setv SUITCHECK "*HS*SH*HC*CH*DS*SD*DC*CD*"
+  #setv FACECHECK "A23456789TJQK"
+ |_break|
+  #OUTPUT [T6530:CLS][T6530:ESC]-1q
+  #unframe
+  #return
+ |_error|
+  #OUTPUT [T6530:CLS][T6530:ESC]-1q
+  #output *ERROR*[T6530:BEEP]
+  #push ERRTXT
+  #errortext /capture ERRTXT/
+  #outputv ERRTXT
+  #filter _break _error _RESTART
+==SIMTACL
+  #unframe
+  #return
+ |_RESTART|
+]
+#filter _break _error _RESTART
+================================================================================
+== Define a NEWGAME routine to do all the new game setup dirty work:
+[#def NEWGAME routine
+ |body|
+  #setmany _ _ _ SHOUR SMINS SSECS,[#contime [#timestamp]]
+  #set STOTSECS [#compute SHOUR * 3600 + SMINS * 60 + SSECS]
+  #set GAMEOVER 0
+  #set COLCOUNT 0
+  #set FLIPCOUNT 0
+  #set OLDCOLNUM 0
+  #set FROM DUMMY 1,1
+  [#loop
+   |do|
+    #push COL1_[COLCOUNT] COL2_[COLCOUNT] COL3_[COLCOUNT] COL4_[COLCOUNT]
+    #push COL5_[COLCOUNT] COL6_[COLCOUNT] COL7_[COLCOUNT]
+    #set COLCOUNT [#compute COLCOUNT + 1]
+   |until|
+    (COLCOUNT = 25)
+  ]
+  #setmany SUIT0 SUIT1 SUIT2 SUIT3,H D S C
+  #setmany FACE0 FACE1 FACE2 FACE3 FACE4 FACE5 FACE6, A 2 3 4 5 6 7
+  #setmany FACE7 FACE8 FACE9 FACE10 FACE11 FACE12   , 8 9 T J Q K
+  #set CARD_COUNTER 0
+  { Create the deck of cards...                                               }
+  [#loop
+   |do|
+    #set CARD_SUIT [#COMPUTE [CARD_COUNTER] / 13 ]
+    #set CARD_FACE [#COMPUTE [CARD_COUNTER] - ([CARD_SUIT]* 13) ]
+    #push DECK[CARD_COUNTER]
+    #push PICK[CARD_COUNTER]
+    #push DP1[CARD_COUNTER]
+    #push DP2[CARD_COUNTER]
+    #push DP3[CARD_COUNTER]
+    #push DP4[CARD_COUNTER]
+    #push CARD[CARD_COUNTER]
+    #set CARD[CARD_COUNTER] [FACE[CARD_FACE]][SUIT[CARD_SUIT]]
+    #set CARD_COUNTER [#compute CARD_COUNTER + 1]
+   |until|
+    (CARD_COUNTER = 52)
+  ]
+  #setmany DP10 DP20 DP30 DP40,0 0 0 0
+]
+================================================================================
+== This routine shuffles the cards:
+[#def SHUFFLE routine
+ |body|
+  #set SHUFFLE_COUNTER 0
+  [#loop
+   |while|
+    (SHUFFLE_COUNTER < 51)
+   |do|
+    #set SHUFFLE_COUNTER [#compute SHUFFLE_COUNTER + 1]
+    #set SHUFFLE_WITH 0
+    [#loop
+     |do|
+      #set SHUFFLE_WITH [#charget "[#timestamp]" 10 to 11]
+      #delay [#charget "[#timestamp]" 11]
+     |until|
+      ((SHUFFLE_WITH > 0) and (SHUFFLE_WITH < 53))
+    ]
+    #set SHUFFLE_WITH [#compute SHUFFLE_WITH - 1]
+    #setv SHUFFLE_TEMP CARD[SHUFFLE_COUNTER]
+    #setv CARD[SHUFFLE_COUNTER] CARD[SHUFFLE_WITH]
+    #setv CARD[SHUFFLE_WITH] SHUFFLE_TEMP
+    #delay [#charget "[#timestamp]" 11]
+  ]
+  #delay [#charget "[#timestamp]" 10 to 11]
+  [#loop
+   |while|
+    (SHUFFLE_COUNTER > 0)
+   |do|
+    #set SHUFFLE_COUNTER [#compute SHUFFLE_COUNTER - 1]
+    #set SHUFFLE_WITH 0
+    [#loop
+     |do|
+      #set SHUFFLE_WITH [#charget "[#timestamp]" 10 to 11]
+     |until|
+      ((SHUFFLE_WITH > 0) and (SHUFFLE_WITH < 53))
+    ]
+    #set SHUFFLE_WITH [#compute SHUFFLE_WITH - 1]
+    #setv SHUFFLE_TEMP CARD[SHUFFLE_COUNTER]
+    #setv CARD[SHUFFLE_COUNTER] CARD[SHUFFLE_WITH]
+    #setv CARD[SHUFFLE_WITH] SHUFFLE_TEMP
+    #delay [#charget "[#timestamp]" 11]
+  ]
+]
+================================================================================
+{ This routine deals the cards.                                               }
+[#def DEAL routine
+ |body|
+  #set COLCOUNT 1
+  #set ROWCOUNT 1
+  #set CARD_COUNTER 0
+  #output /hold/ [T6530:CLS]
+  T6530:PRINTAT 30,2 "[COLOR[COLOR:INSTX]] S O L I T A I R E [COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 1,4  "[COLOR[COLOR:INSTX]] F1    F2[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 20,3 "[COLOR[COLOR:INSTX]]SF3   SF4   SF5   SF6   SF7   SF8   SF9[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 21,4 "[COLOR[COLOR:INSTX]]F3    F4    F5    F6    F7    F8    F9[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 2,5  "[COLOR[COLOR:BACK]]## [COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 69,3 "[COLOR[COLOR:INSTX]]SF13[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 70,4 "[COLOR[COLOR:INSTX]]F13[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 71,5 "[COLOR[COLOR:BACK]]   [COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 69,6 "[COLOR[COLOR:INSTX]]SF14[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 70,7 "[COLOR[COLOR:INSTX]]F14[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 71,8 "[COLOR[COLOR:BACK]]   [COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 69,9 "[COLOR[COLOR:INSTX]]SF15[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 70,10"[COLOR[COLOR:INSTX]]F15[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 71,11"[COLOR[COLOR:BACK]]   [COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 69,12"[COLOR[COLOR:INSTX]]SF16[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 70,13"[COLOR[COLOR:INSTX]]F16[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 71,14"[COLOR[COLOR:BACK]]   [COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 1,9  "[COLOR[COLOR:INSTX]]F1[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 1,10 "[COLOR[COLOR:INSTX]]Deal 3[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 1,12 "[COLOR[COLOR:INSTX]]Fxx[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 1,13 "[COLOR[COLOR:INSTX]]Select Card[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 1,15 "[COLOR[COLOR:INSTX]]SHIFT-Fxx[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 1,16 "[COLOR[COLOR:INSTX]]Move Card(s)[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 1,18 "[COLOR[COLOR:INSTX]]F12[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 1,19 "[COLOR[COLOR:INSTX]]Instructions+Colors[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 1,21 "[COLOR[COLOR:INSTX]]SF12       BREAK[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 1,22 "[COLOR[COLOR:INSTX]]New Game   Quit[COLOR[COLOR:NORMAL]]"
+  T6530:LOCATE 21,5
+  [#loop
+    |do|
+    [#if (COLCOUNT = ROWCOUNT)
+     |then|
+      SETHL [CARD[CARD_COUNTER]]
+      #outputv /hold/ "[COLOR[COLOR:[HL]]][CARD[CARD_COUNTER]] [COLOR[COLOR:NORMAL]] "
+      #setv COL[ROWCOUNT]_[COLCOUNT] "[CARD[CARD_COUNTER]]-"
+     |else|
+      #outputv /hold/ "[COLOR[COLOR:BACK]]## [COLOR[COLOR:NORMAL]] "
+      #setv COL[ROWCOUNT]_[COLCOUNT] "[CARD[CARD_COUNTER]]X"
+    ]
+    [#if (ROWCOUNT = 7)
+     |then|
+      #set COLCOUNT [#compute COLCOUNT + 1]
+      #setv ROWCOUNT COLCOUNT
+      #output
+      T6530:LOCATE [#compute 21+(ROWCOUNT -1)*6],[#compute COLCOUNT + 4]
+     |else|
+      #set ROWCOUNT [#compute ROWCOUNT + 1]
+    ]
+    #set CARD_COUNTER [#compute CARD_COUNTER + 1]
+   |until|
+    (CARD_COUNTER = 28)
+  ]
+  #set DECK0 24
+  #set PICK0 0
+  [#loop
+   |do|
+    #setv DECK[#compute CARD_COUNTER - 27] CARD[CARD_COUNTER]
+    #set  CARD_COUNTER [#compute CARD_COUNTER + 1]
+   |until|
+    (CARD_COUNTER = 52)
+  ]
+]
+================================================================================
+{ These are Instructions on how to play...  Accessed via "F12"                }
+[#def INSTRUCTIONS routine
+ |body|
+  #output /hold/ [T6530:CLS]
+  T6530:PRINTAT 30,2 "[COLOR[COLOR:INSTX]] S O L I T A I R E [COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 1,5 "[T6530:NRM]"
+  T6530:PRINTAT 1,4 "[T6530:INV]                I N S T R U C T I O N S "
+
+  T6530:PRINTAT 10,6  " The game is played with the function keys.  To select a card"
+  T6530:PRINTAT 10,7  " to move, press the function key associated with the column"
+  T6530:PRINTAT 10,8  " to mark the card with a '>' sign (repeat to move to the next card)."
+  T6530:PRINTAT 10,9  " To move the card (or stack) to another column, hold down SHIFT"
+  T6530:PRINTAT 10,10 " and press the function key for the target column."
+
+  T6530:PRINTAT 10,12 " Press [T6530:INV]F12 [T6530:NRM] to access these instructions anytime."
+
+  T6530:PRINTAT 1,14 "[T6530:NRM]"
+  T6530:PRINTAT 1,13 "[T6530:INV]                      C O L O R S"
+  T6530:PRINTAT  8,15 "[T6530:NRMLOW]F1: [T6530:NRM]"
+  T6530:PRINTAT  8,16 "[T6530:NRMLOW]F2: [T6530:NRM]"
+  T6530:PRINTAT  8,17 "[T6530:NRMLOW]F3: [T6530:NRM]"
+  T6530:PRINTAT  8,18 "[T6530:NRMLOW]F4: [T6530:NRM]"
+  T6530:PRINTAT 15,15 " [COLOR[COLOR:INSTX]]     This is the color for instructional text.[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 15,16 " [COLOR[COLOR:BACK] ]## [COLOR[COLOR:NORMAL]] This is a card that is face down."
+  T6530:PRINTAT 15,17 " [COLOR[COLOR:BLACK]]AC [COLOR[COLOR:NORMAL]] This is a BLACK card."
+  T6530:PRINTAT 15,18 " [COLOR[COLOR:RED]  ]KH [COLOR[COLOR:NORMAL]] This is a RED card."
+  T6530:PRINTAT 15,20 " Press F1-F4 to set the colors"
+  T6530:PRINTAT 15,22 "[T6530:INV]Press F16 to return to the game! [T6530:NRM]"
+  [#loop
+   |do|
+    T6530:PRINTAT 15,15 " [COLOR[COLOR:INSTX]]"
+    T6530:PRINTAT 15,16 " [COLOR[COLOR:BACK] ]"
+    T6530:PRINTAT 15,17 " [COLOR[COLOR:BLACK]]"
+    T6530:PRINTAT 15,18 " [COLOR[COLOR:RED]  ]"
+    #inputv /functionkey FKEY,noecho/ ACTION ""
+    [#case [FKEY]
+     |F1|
+      #set COLOR:INSTX [#compute COLOR:INSTX + 1]
+      [#if (COLOR:INSTX > 15) |then| #set COLOR:INSTX 1]
+     |F2|
+      #set COLOR:BACK [#compute COLOR:BACK + 1]
+      [#if (COLOR:BACK > 15) |then| #set COLOR:BACK 1]
+     |F3|
+      #set COLOR:BLACK [#compute COLOR:BLACK + 1]
+      [#if (COLOR:BLACK > 15) |then| #set COLOR:BLACK 1]
+     |F4|
+      #set COLOR:RED   [#compute COLOR:RED   + 1]
+      [#if (COLOR:RED   > 15) |then| #set COLOR:RED   1]
+     |F16|
+      #return
+     |OTHERWISE|
+    ]
+   |until|
+    0 == Infinite Loop - exited with F16
+  ]
+]
+================================================================================
+{ This routine redraws the entire screen.                                     }
+[#def REDRAW routine
+ |body|
+  #output /hold/ [T6530:CLS]
+  T6530:PRINTAT 30,2 "[COLOR[COLOR:INSTX]] S O L I T A I R E [COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 1,4  "[COLOR[COLOR:INSTX]] F1    F2[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 20,3 "[COLOR[COLOR:INSTX]]SF3   SF4   SF5   SF6   SF7   SF8   SF9[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 21,4 "[COLOR[COLOR:INSTX]]F3    F4    F5    F6    F7    F8    F9[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 2,5  "[COLOR[COLOR:BACK]]## [COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 69,3 "[COLOR[COLOR:INSTX]]SF13[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 70,4 "[COLOR[COLOR:INSTX]]F13[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 71,5 "[COLOR[COLOR:BACK]]   [COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 69,6 "[COLOR[COLOR:INSTX]]SF14[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 70,7 "[COLOR[COLOR:INSTX]]F14[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 71,8 "[COLOR[COLOR:BACK]]   [COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 69,9 "[COLOR[COLOR:INSTX]]SF15[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 70,10"[COLOR[COLOR:INSTX]]F15[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 71,11"[COLOR[COLOR:BACK]]   [COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 69,12"[COLOR[COLOR:INSTX]]SF16[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 70,13"[COLOR[COLOR:INSTX]]F16[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 71,14"[COLOR[COLOR:BACK]]   [COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 1,9  "[COLOR[COLOR:INSTX]]F1[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 1,10 "[COLOR[COLOR:INSTX]]Deal 3[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 1,12 "[COLOR[COLOR:INSTX]]Fxx[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 1,13 "[COLOR[COLOR:INSTX]]Select Card[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 1,15 "[COLOR[COLOR:INSTX]]SHIFT-Fxx[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 1,16 "[COLOR[COLOR:INSTX]]Move Card(s)[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 1,18 "[COLOR[COLOR:INSTX]]F12[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 1,19 "[COLOR[COLOR:INSTX]]Instructions+Colors[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 1,21 "[COLOR[COLOR:INSTX]]SF12       BREAK[COLOR[COLOR:NORMAL]]"
+  T6530:PRINTAT 1,22 "[COLOR[COLOR:INSTX]]New Game   Quit[COLOR[COLOR:NORMAL]]"
+  #setmany COLCOUNT ROWCOUNT,1 1
+  [#loop
+   |do|
+    #set TEMP [#compute COLCOUNT * 6 + 14],[#compute ROWCOUNT + 4]
+    [#if not ("[#charget COL[COLCOUNT]_[ROWCOUNT] 3]" '=' "X")
+     |then|
+      [#if (not [#emptyv COL[COLCOUNT]_[ROWCOUNT]])
+       |then|
+        SETHL [COL[COLCOUNT]_[ROWCOUNT]]
+        T6530:PRINTAT [TEMP] " [COLOR[COLOR:[HL]]][#charget COL[COLCOUNT]_[ROWCOUNT] 1 to 2] [COLOR[COLOR:NORMAL]] "
+       |else|
+        #set COLCOUNT [#compute COLCOUNT + 1]
+        #set ROWCOUNT 0
+      ]
+     |else|
+      T6530:PRINTAT [TEMP] " [COLOR[COLOR:BACK]]## [COLOR[COLOR:NORMAL]] "
+    ]
+    #set ROWCOUNT [#compute ROWCOUNT + 1]
+    [#if (ROWCOUNT = 22)
+     |then|
+      #set COLCOUNT [#compute COLCOUNT + 1]
+      #set ROWCOUNT 1
+    ]
+   |until|
+    (COLCOUNT = 8)
+  ]
+  [#if (DECK0 > 0)
+   |then|
+    T6530:PRINTAT 2,5 "[COLOR[COLOR:BACK]]## [COLOR[COLOR:NORMAL]] "
+  ]
+  [#case [FLIPCOUNT]
+   |0|
+    T6530:PRINTAT 7,5 " [COLOR[COLOR:NORMAL]]   [COLOR[COLOR:NORMAL]]"
+    T6530:PRINTAT 7,6 " [COLOR[COLOR:NORMAL]]   [COLOR[COLOR:NORMAL]]"
+    T6530:PRINTAT 7,7 " [COLOR[COLOR:NORMAL]]   [COLOR[COLOR:NORMAL]]"
+   |1|
+    SETHL [PICK[#compute PICK0 - 2]]
+    T6530:PRINTAT 7,5 " [COLOR[COLOR:[HL]]][PICK[#compute PICK0 - 2]] [COLOR[COLOR:NORMAL]]"
+    T6530:PRINTAT 7,6 " [COLOR[COLOR:NORMAL]]   [COLOR[COLOR:NORMAL]]"
+    T6530:PRINTAT 7,7 " [COLOR[COLOR:NORMAL]]   [COLOR[COLOR:NORMAL]]"
+   |2|
+    SETHL [PICK[#compute PICK0 - 2]]
+    T6530:PRINTAT 7,5 " [COLOR[COLOR:[HL]]][PICK[#compute PICK0 - 2]] [COLOR[COLOR:NORMAL]]"
+    SETHL [PICK[#compute PICK0 - 1]]
+    T6530:PRINTAT 7,6 " [COLOR[COLOR:[HL]]][PICK[#compute PICK0 - 1]] [COLOR[COLOR:NORMAL]]"
+    T6530:PRINTAT 7,7 " [COLOR[COLOR:NORMAL]]   [COLOR[COLOR:NORMAL]]"
+   |3|
+    SETHL [PICK[#compute PICK0 - 2]]
+    T6530:PRINTAT 7,5 " [COLOR[COLOR:[HL]]][PICK[#compute PICK0 - 2]] [COLOR[COLOR:NORMAL]]"
+    SETHL [PICK[#compute PICK0 - 1]]
+    T6530:PRINTAT 7,6 " [COLOR[COLOR:[HL]]][PICK[#compute PICK0 - 1]] [COLOR[COLOR:NORMAL]]"
+    SETHL [PICK[PICK0]]
+    T6530:PRINTAT 7,7 " [COLOR[COLOR:[HL]]][PICK[PICK0]] [COLOR[COLOR:NORMAL]]"
+  ]
+  [#if (DP10 > 0)
+   |then|
+    SETHL [DP1[DP10]]
+    T6530:PRINTAT 70,5 " [COLOR[COLOR:[HL]]][DP1[DP10]] [COLOR[COLOR:NORMAL]] "
+   |else|
+    T6530:PRINTAT 70,5 " [COLOR[COLOR:BACK]]   [COLOR[COLOR:NORMAL]] "
+  ]
+  [#if (DP20 > 0)
+   |then|
+    SETHL [DP2[DP20]]
+    T6530:PRINTAT 70,8 " [COLOR[COLOR:[HL]]][DP2[DP20]] [COLOR[COLOR:NORMAL]] "
+   |else|
+    T6530:PRINTAT 70,8 " [COLOR[COLOR:BACK]]   [COLOR[COLOR:NORMAL]] "
+  ]
+  [#if (DP30 > 0)
+   |then|
+    SETHL [DP3[DP30]]
+    T6530:PRINTAT 70,11 " [COLOR[COLOR:[HL]]][DP3[DP30]] [COLOR[COLOR:NORMAL]] "
+   |else|
+    T6530:PRINTAT 70,11 " [COLOR[COLOR:BACK]]   [COLOR[COLOR:NORMAL]] "
+  ]
+  [#if (DP40 > 0)
+   |then|
+    SETHL [DP4[DP40]]
+    T6530:PRINTAT 70,14 " [COLOR[COLOR:[HL]]][DP4[DP40]] [COLOR[COLOR:NORMAL]] "
+   |else|
+    T6530:PRINTAT 70,14 " [COLOR[COLOR:BACK]]   [COLOR[COLOR:NORMAL]] "
+  ]
+  #setmany FROMVAR FROMLOC,[FROM]
+  [#if not (FROMVAR '=' "DUMMY")
+   |then|
+    T6530:PRINTAT [FROMLOC] ">"
+  ]
+]
+===============================================================================
+{ This routine determines what color to highligh the card base on the suit.   }
+[#def SETHL routine
+ |body|
+  [#if [#argument /value HLSUIT/ text]]
+  [#case [#charget HLSUIT 2]
+   |h d|
+    #set HL RED
+   |otherwise|
+    #set HL BLACK
+  ]
+]
+===============================================================================
+{ This is the routine which gets a function keypress and acts on it.          }
+[#def PLAY routine
+ |body|
+  [#loop
+   |do|
+    T6530:LOCATE 2,2
+    #inputv /functionkey FKEY,noecho/ ACTION ""
+    T6530:PRINTAT 2,2 "[COLOR[COLOR:NORMAL]]                   [COLOR[COLOR:NORMAL]]"
+    [#case [FKEY]
+     |F1|
+      FLIP3
+      SELECTPICK
+     |F2|
+      SELECTPICK
+     |F3|
+      FROMCOL 1
+     |F4|
+      FROMCOL 2
+     |F5|
+      FROMCOL 3
+     |F6|
+      FROMCOL 4
+     |F7|
+      FROMCOL 5
+     |F8|
+      FROMCOL 6
+     |F9|
+      FROMCOL 7
+     |F12|
+      INSTRUCTIONS
+      REDRAW
+     |F13|
+      [#if (DP10 > 0)
+       |then|
+        #setmany _ OLDFROM,[FROM]
+        T6530:PRINTAT [OLDFROM] "[COLOR[COLOR:NORMAL]]"
+        #set FROM DP1[DP10] 70,5
+        T6530:PRINTAT 70,5 ">"
+        #set OLDCOLNUM 0
+      ]
+     |F14|
+      [#if (DP20 > 0)
+       |then|
+        #setmany _ OLDFROM,[FROM]
+        T6530:PRINTAT [OLDFROM] "[COLOR[COLOR:NORMAL]]"
+        #set FROM DP2[DP20] 70,8
+        T6530:PRINTAT 70,8 ">"
+        #set OLDCOLNUM 0
+      ]
+     |F15|
+      [#if (DP30 > 0)
+       |then|
+        #setmany _ OLDFROM,[FROM]
+        T6530:PRINTAT [OLDFROM] "[COLOR[COLOR:NORMAL]]"
+        #set FROM DP3[DP30] 70,11
+        T6530:PRINTAT 70,11 ">"
+        #set OLDCOLNUM 0
+      ]
+     |F16|
+      [#if (DP40 > 0)
+       |then|
+        #setmany _ OLDFROM,[FROM]
+        T6530:PRINTAT [OLDFROM] "[COLOR[COLOR:NORMAL]]"
+        #set FROM DP4[DP40] 70,14
+        T6530:PRINTAT 70,14 ">"
+        #set OLDCOLNUM 0
+      ]
+     |SF1|
+      SIMTACL
+     |SF3|
+      TOCOL 1
+     |SF4|
+      TOCOL 2
+     |SF5|
+      TOCOL 3
+     |SF6|
+      TOCOL 4
+     |SF7|
+      TOCOL 5
+     |SF8|
+      TOCOL 6
+     |SF9|
+      TOCOL 7
+     |SF12|
+      #raise _RESTART
+     |SF13|
+      TODP 1
+     |SF14|
+      TODP 2
+     |SF15|
+      TODP 3
+     |SF16|
+      TODP 4
+     |OTHERWISE|
+    ]
+   |until|
+    GAMEOVER
+  ]
+]
+===============================================================================
+{ This routine selects the correct card from the pick pile.                   }
+[#def SELECTPICK routine
+ |body|
+  [#if (FLIPCOUNT > 0)
+   |then|
+    #setmany _ OLDFROM,[FROM]
+    T6530:PRINTAT [OLDFROM] "[COLOR[COLOR:NORMAL]]"
+    #set FROM PICK[#compute PICK0 - 3 + FLIPCOUNT] 7,[#compute FLIPCOUNT +4]
+    T6530:PRINTAT 7,[#compute FLIPCOUNT + 4] ">"
+    #set OLDCOLNUM 0
+  ]
+]
+===============================================================================
+{ This routine places the selected card on the Discharge Pile.                }
+[#def TODP routine
+ |body|
+  [#if ("[#charget FROM 1 to 5]" '=' "DUMMY")
+   |then|
+    T6530:PRINTAT 1,3 "[COLOR[COLOR:ERROR]][T6530:CLLINE]"
+    T6530:PRINTAT 16,3 "No card selected to move!  Select a card first.[T6530:BEEP]"
+    #delay 200
+    T6530:PRINTAT 1,3 "[T6530:clline]"
+    T6530:PRINTAT 20,3 "[COLOR[COLOR:INSTX]]SF3   SF4   SF5   SF6   SF7   SF8   SF9[COLOR[COLOR:NORMAL]]"
+    #return
+  ]
+  #if [#argument /value COLNUM/ number]
+  #set TOVAR       DP[COLNUM][DP[COLNUM]0]
+  #set TOLOC       70,[#compute COLNUM * 3 + 2]
+  #set TO [TOVAR] [TOLOC]
+  #set TODESTVAR   DP[COLNUM][#compute DP[COLNUM]0 + 1 ]
+  #setmany FROMVAR FROMLOC,[FROM]
+  [#if (DP[COLNUM]0 > 0)
+   |then|
+    #set TOSUIT      [#charget DP[COLNUM]1 2]
+    #set FROMSUIT    [#charget [FROMVAR] 2]
+    [#if not (TOSUIT '=' FROMSUIT)
+     |then|
+      T6530:PRINTAT 1,3 "[COLOR[COLOR:ERROR]][T6530:CLLINE]"
+      T6530:PRINTAT 22,3 "Illegal move -- Suits do not match![T6530:BEEP]"
+      #delay 200
+      T6530:PRINTAT 1,3 "[T6530:clline]"
+      T6530:PRINTAT 20,3 "[COLOR[COLOR:INSTX]]SF3   SF4   SF5   SF6   SF7   SF8   SF9[COLOR[COLOR:NORMAL]]"
+      #return
+    ]
+    #set TOFACE   [#charfindv FACECHECK 1 "[#charget [TOVAR] 1]"]
+    #set FROMFACE [#charfindv FACECHECK 1 "[#charget [FROMVAR] 1]"]
+    [#if not ([#compute FROMFACE - 1] = TOFACE)
+     |then|
+      T6530:PRINTAT 1,3 "[COLOR[COLOR:ERROR]][T6530:CLLINE]"
+      T6530:PRINTAT 19,3 "Illegal move -- Cards must be in order![T6530:BEEP]"
+      #delay 200
+      T6530:PRINTAT 1,3 "[T6530:clline]"
+      T6530:PRINTAT 20,3 "[COLOR[COLOR:INSTX]]SF3   SF4   SF5   SF6   SF7   SF8   SF9[COLOR[COLOR:NORMAL]]"
+      #return
+    ]
+   |else|
+    #set FROMFACE [#charget [FROMVAR] 1]
+    [#if not (FROMFACE '=' "A")
+     |then|
+      T6530:PRINTAT 1,3 "[COLOR[COLOR:ERROR]][T6530:CLLINE]"
+      T6530:PRINTAT 8,3 "Illegal move -- First card on the Discharge pile must be an ACE.[T6530:BEEP]"
+      #delay 200
+      T6530:PRINTAT 1,3 "[T6530:clline]"
+      T6530:PRINTAT 20,3 "[COLOR[COLOR:INSTX]]SF3   SF4   SF5   SF6   SF7   SF8   SF9[COLOR[COLOR:NORMAL]]"
+      #return
+    ]
+  ]
+  T6530:PRINTAT [OLDFROM] "[COLOR[COLOR:NORMAL]]"
+  [#case [#charget FROMVAR 1 TO 3]
+   |COL|
+    [#if not [#emptyv [#charget FROMVAR 1 to 5][#compute [#charget FROMVAR 6 to 7] + 1]]
+     |then|
+      T6530:PRINTAT 1,3 "[COLOR[COLOR:ERROR]][T6530:CLLINE]"
+      T6530:PRINTAT 10,3 "Illegal move -- Can't discharge more than one card at a time![T6530:BEEP]"
+      #delay 200
+      T6530:PRINTAT 1,3 "[T6530:clline]"
+      T6530:PRINTAT 20,3 "[COLOR[COLOR:INSTX]]SF3   SF4   SF5   SF6   SF7   SF8   SF9[COLOR[COLOR:NORMAL]]"
+      #return
+    ]
+    == Move the card to this discharge pile
+    #setv [TODESTVAR] "[#charget [FROMVAR] 1 to 2]"
+    SETHL [[TODESTVAR]]
+    T6530:PRINTAT [TOLOC] " [COLOR[COLOR:[HL]]][[TODESTVAR]] [COLOR[COLOR:NORMAL]]"
+    T6530:PRINTAT [FROMLOC] " [COLOR[COLOR:NORMAL]]   [COLOR[COLOR:NORMAL]]"
+    #set [FROMVAR]
+    #set TEMP    [#compute [#charget FROMVAR 6 to 7] - 1]
+    [#if (TEMP > 0)
+     |then|
+      #set FROMLOC [#compute [#charget FROMVAR 4] * 6 + 14],[#compute TEMP + 4]
+      #set FROMVAR [#charget FROMVAR 1 to 5][TEMP]
+      #setv [FROMVAR] "[#charget [FROMVAR] 1 to 2]"
+      SETHL [[FROMVAR]]
+      T6530:PRINTAT [FROMLOC] " [COLOR[COLOR:[HL]]][[FROMVAR]] [COLOR[COLOR:NORMAL]]"
+    ]
+    #set DP[COLNUM]0 [#compute DP[COLNUM]0 + 1]
+    #set FROM DUMMY 1,1
+   |PIC|
+    == Move the card to this discharge pile
+    #setv [TODESTVAR] "[#charget [FROMVAR] 1 to 2]"
+    SETHL [[TODESTVAR]]
+    T6530:PRINTAT [TOLOC] " [COLOR[COLOR:[HL]]][[TODESTVAR]] [COLOR[COLOR:NORMAL]]"
+    T6530:PRINTAT [FROMLOC] " [COLOR[COLOR:NORMAL]]   [COLOR[COLOR:NORMAL]]"
+    #set FLIPCOUNT [#compute FLIPCOUNT - 1]
+    #set DP[COLNUM]0 [#compute DP[COLNUM]0 + 1]
+    #set [FROMVAR]
+    #set FROM DUMMY 1,1
+    [#if (FLIPCOUNT = 0)
+     |then|
+      BACK3
+    ]
+    SELECTPICK
+   |otherwise|
+    T6530:PRINTAT 1,3 "[COLOR[COLOR:ERROR]][T6530:CLLINE]"
+    T6530:PRINTAT 17,3 "You can't move cards between discharge piles![T6530:BEEP]"
+    #delay 200
+    T6530:PRINTAT 1,3 "[T6530:CLLINE]"
+    T6530:PRINTAT 20,3 "[COLOR[COLOR:INSTX]]SF3   SF4   SF5   SF6   SF7   SF8   SF9[COLOR[COLOR:NORMAL]]"
+    #return
+  ]
+  [#if (DP10=13) and (DP20=13) and (DP30=13) and (DP40=13)
+   |then|
+    T6530:PRINTAT 1,3 "[COLOR[COLOR:ERROR]][T6530:CLLINE]"
+    #setmany _ _ _ FHOUR FMINS FSECS,[#contime [#timestamp]]
+    #set FTOTSECS [#compute FHOUR * 3600 + FMINS * 60 + FSECS]
+    #set DTOTSECS [#compute FTOTSECS - STOTSECS]
+    #set DMINS    [#compute DTOTSECS / 60 ]
+    #set DSECS    [#compute DTOTSECS - DMINS * 60 ]
+    [#if (DMINS < 10) |then| #set DMINS 0[DMINS]]
+    [#if (DSECS < 10) |then| #set DSECS 0[DSECS]]
+    T6530:PRINTAT  4,3 "CONTRATULATIONS!  YOU WON!  Game time: [DMINS]:[DSECS]!  Press SF12 to play again![T6530:BEEP]"
+    #delay 50
+    T6530:PRINTAT 1,3 "[COLOR[COLOR:RED]]"
+    #delay 50
+    T6530:PRINTAT 1,3 "[COLOR[COLOR:ERROR]]"
+    #delay 50
+    T6530:PRINTAT 1,3 "[COLOR[COLOR:RED]]"
+    #delay 50
+    T6530:PRINTAT 1,3 "[COLOR[COLOR:ERROR]]"
+  ]
+]
+================================================================================
+{ This routine moves the selected card to the selected column.                }
+[#def TOCOL routine
+ |body|
+  [#if ("[#charget FROM 1 to 5]" '=' "DUMMY")
+   |then|
+    T6530:PRINTAT 1,3 "[COLOR[COLOR:ERROR]][T6530:CLLINE]"
+    T6530:PRINTAT 16,3 "No card selected to move!  Select a card first.[T6530:BEEP]"
+    #delay 200
+    T6530:PRINTAT 1,3 "[T6530:clline]"
+    T6530:PRINTAT 20,3 "[COLOR[COLOR:INSTX]]SF3   SF4   SF5   SF6   SF7   SF8   SF9[COLOR[COLOR:NORMAL]]"
+    #return
+  ]
+  #if [#argument /value COLNUM/ number]
+  [#if (OLDCOLNUM = COLNUM)
+   |then|
+    T6530:PRINTAT 1,3 "[COLOR[COLOR:ERROR]][T6530:CLLINE]"
+    T6530:PRINTAT 16,3 "You can't move these cards to the same column![T6530:BEEP]"
+    #delay 200
+    T6530:PRINTAT 1,3 "[T6530:clline]"
+    T6530:PRINTAT 20,3 "[COLOR[COLOR:INSTX]]SF3   SF4   SF5   SF6   SF7   SF8   SF9[COLOR[COLOR:NORMAL]]"
+    #return
+  ]
+  #setmany FROMVAR FROMLOC,[FROM]
+  #set  COLSEARCH 23
+  [#loop
+   |while|
+    ([#emptyv COL[COLNUM]_[COLSEARCH]]) and (COLSEARCH > 0)
+   |do|
+    #set COLSEARCH [#compute COLSEARCH - 1]
+  ]
+  #set TOVAR       COL[COLNUM]_[COLSEARCH]
+  #set TOLOC       [#compute 14 + [COLNUM] * 6],[#compute COLSEARCH + 4]
+  #set TO [TOVAR] [TOLOC]
+  #set TODESTVAR   COL[COLNUM]_[#compute COLSEARCH + 1]
+  #set TODESTLOC   [#compute 14 + [COLNUM] * 6],[#compute COLSEARCH + 5]
+  #set TOCOLNUM    [COLNUM]
+  #set TOSUIT      [#charget COL[COLNUM]_[COLSEARCH] 2]
+  #set FROMSUIT    [#charget [FROMVAR] 2]
+  #set FROMFACE    [#charfindv FACECHECK 1 "[#charget [FROMVAR] 1]"]
+  [#if ([#emptyv COL[COLNUM]_1]) and (FROMFACE = 13)
+   |then|
+    #set TODESTVAR   COL[COLNUM]_1
+    #set TODESTLOC   [#compute 14 + [COLNUM] * 6],5
+   |else|
+    [#if ([#charfindv SUITCHECK 1 "*[TOSUIT][FROMSUIT]*"] = 0)
+     |then|
+      T6530:PRINTAT 1,3 "[COLOR[COLOR:ERROR]][T6530:CLLINE]"
+      T6530:PRINTAT 16,3 "Illegal move -- suits cannot be the same color![T6530:BEEP]"
+      #delay 200
+      T6530:PRINTAT 1,3 "[T6530:clline]"
+      T6530:PRINTAT 20,3 "[COLOR[COLOR:INSTX]]SF3   SF4   SF5   SF6   SF7   SF8   SF9[COLOR[COLOR:NORMAL]]"
+      #return
+    ]
+    #set TOFACE   [#charfindv FACECHECK 1 "[#charget COL[COLNUM]_[COLSEARCH] 1]"]
+    [#if not ([#compute TOFACE -1] = FROMFACE)
+     |then|
+      T6530:PRINTAT 1,3 "[COLOR[COLOR:ERROR]][T6530:CLLINE]"
+      T6530:PRINTAT 19,3 "Illegal move -- Cards must be in order![T6530:BEEP]"
+      #delay 200
+      T6530:PRINTAT 1,3 "[T6530:clline]"
+      T6530:PRINTAT 20,3 "[COLOR[COLOR:INSTX]]SF3   SF4   SF5   SF6   SF7   SF8   SF9[COLOR[COLOR:NORMAL]]"
+      #return
+    ]
+  ]
+  T6530:PRINTAT [OLDFROM] "[COLOR[COLOR:NORMAL]]"
+  [#case [#charget FROMVAR 1 TO 3]
+   |COL|
+    == Move the column to this column
+    #set FROMCOLNUM    [#charget FROMVAR 4]
+    #set FROMCOLVAR    [#charget FROMVAR 1 TO 5]
+    #set FROMCOUNT     [#charget FROMVAR 6 TO 7]
+    #set TOCOLVAR      [#charget TODESTVAR 1 TO 5]
+    #set TOCOUNT       [#charget TODESTVAR 6 TO 7]
+    [#if (FROMCOUNT > 1)
+     |then|
+      #set FROMLOC [#compute 14 + [FROMCOLNUM] * 6],[#compute FROMCOUNT + 3]
+      SETHL [[FROMCOLVAR][#compute FROMCOUNT - 1]]
+      #set TEMP [[FROMCOLVAR][#compute FROMCOUNT - 1]]
+      #set [FROMCOLVAR][#compute FROMCOUNT - 1] [#charget TEMP 1 to 2]
+      T6530:PRINTAT [FROMLOC] " [COLOR[COLOR:[HL]]][#charget TEMP 1 to 2] [COLOR[COLOR:NORMAL]]"
+    ]
+    [#loop
+     |while|
+      not [#emptyv [FROMCOLVAR][FROMCOUNT]]
+     |do|
+      #setv [TOCOLVAR][TOCOUNT] "[#charget [FROMCOLVAR][FROMCOUNT] 1 to 2]"
+      SETHL [[TOCOLVAR][TOCOUNT]]
+      #set FROMLOC [#compute 14 + [FROMCOLNUM] * 6],[#compute FROMCOUNT + 4]
+      #set TOLOC [#compute 14 + [TOCOLNUM] * 6],[#compute TOCOUNT + 4]
+      T6530:PRINTAT [TOLOC] " [COLOR[COLOR:[HL]]][[TOCOLVAR][TOCOUNT]] [COLOR[COLOR:NORMAL]]"
+      T6530:PRINTAT [FROMLOC] " [COLOR[COLOR:NORMAL]]   [COLOR[COLOR:NORMAL]]"
+      #set [FROMCOLVAR][FROMCOUNT]
+      #set FROMCOUNT [#compute FROMCOUNT + 1]
+      #set TOCOUNT [#compute TOCOUNT + 1]
+    ]
+   |PIC|
+    == Move the single card to this column
+    #setv [TODESTVAR] "[#charget [FROMVAR] 1 to 2]"
+    SETHL [[TODESTVAR]]
+    T6530:PRINTAT [TODESTLOC] " [COLOR[COLOR:[HL]]][[TODESTVAR]] [COLOR[COLOR:NORMAL]]"
+    T6530:PRINTAT [FROMLOC] " [COLOR[COLOR:NORMAL]]   [COLOR[COLOR:NORMAL]]"
+    #set FROM DUMMY 1,1
+    #set FLIPCOUNT [#compute FLIPCOUNT - 1]
+    #set [FROMVAR]
+    [#if (FLIPCOUNT = 0)
+     |then|
+      BACK3
+    ]
+    SELECTPICK
+   |DP1 DP2 DP3 DP4|
+    == Move the single card to this column
+    #setv [TODESTVAR] "[#charget [FROMVAR] 1 to 2]"
+    [#case [FROMFACE]
+     |A|
+      T6530:PRINTAT 1,3 "[COLOR[COLOR:ERROR]][T6530:CLLINE]"
+      T6530:PRINTAT 11,3 "Illegal move -- Can't move an ACE from the Discharge Pile![T6530:BEEP]"
+      #delay 200
+      T6530:PRINTAT 1,3 "[T6530:clline]"
+      T6530:PRINTAT 20,3 "[COLOR[COLOR:INSTX]]SF3   SF4   SF5   SF6   SF7   SF8   SF9[COLOR[COLOR:NORMAL]]"
+      #return
+     |otherwise|
+    ]
+    SETHL [[TODESTVAR]]
+    T6530:PRINTAT [TODESTLOC] " [COLOR[COLOR:[HL]]][[TODESTVAR]] [COLOR[COLOR:NORMAL]]"
+    #set DPNUM [#charget FROMVAR 1 to 3]
+    #set [DPNUM]0 [#compute [DPNUM]0 - 1]
+    T6530:PRINTAT [FROMLOC]   " [COLOR[COLOR:[HL]]][[DPNUM][[DPNUM]0]] [COLOR[COLOR:NORMAL]]"
+  ]
+]
+================================================================================
+{ This selects a card from the 'from' column and move the arrow to it.        }
+[#def FROMCOL routine
+ |body|
+  #setmany _ OLDFROM,[FROM]
+  T6530:PRINTAT [OLDFROM] "[COLOR[COLOR:NORMAL]]"
+  #if [#argument /value COLNUM/ number]
+  [#if [#emptyv COL[COLNUM]_1]
+   |then|
+    T6530:PRINTAT 1,3 "[COLOR[COLOR:ERROR]][T6530:CLLINE]"
+    T6530:PRINTAT 22,3 "Invalid selection -- Column is empty![T6530:BEEP]"
+    #delay 200
+    T6530:PRINTAT 1,3 "[T6530:clline]"
+    T6530:PRINTAT 20,3 "[COLOR[COLOR:INSTX]]SF3   SF4   SF5   SF6   SF7   SF8   SF9[COLOR[COLOR:NORMAL]]"
+    #return
+  ]
+  [#if (OLDCOLNUM = COLNUM)
+   |then|
+    #set COLSEARCH [#compute [#charget FROM 6 to 7] - 1 ]
+    [#if (COLSEARCH = 0)
+     |then|
+      #set OLDCOLNUM 0
+     |else|
+      [#if ("[#charget COL[COLNUM]_[COLSEARCH] 3]" '=' "X")
+       |then|
+        #set OLDCOLNUM 0
+      ]
+    ]
+  ]
+  [#if not (OLDCOLNUM = COLNUM)
+   |then|
+    #set  COLSEARCH 23
+    [#loop
+     |while|
+      [#emptyv COL[COLNUM]_[COLSEARCH]]
+     |do|
+      #set COLSEARCH [#compute COLSEARCH - 1]
+    ]
+  ]
+  #set FROM COL[COLNUM]_[COLSEARCH] [#compute 14 + [COLNUM] * 6],[#compute COLSEARCH + 4]
+  T6530:PRINTAT [#compute 14 + [COLNUM] * 6],[#compute COLSEARCH + 4] ">"
+  #setv OLDCOLNUM COLNUM
+]
+===============================================================================
+{ This routine turns over the previous three cards in the pick pile.          }
+[#def BACK3 routine
+ |body|
+  [#if (PICK0 > 3)
+   |then|
+    #set PICK0 [#compute PICK0 - 3]
+    #set FLIPCOUNT 0
+    [#if [#emptyv PICK[#compute PICK0 - 2]]
+     |then|
+      T6530:PRINTAT 7,5 " [COLOR[COLOR:NORMAL]]   [COLOR[COLOR:NORMAL]]"
+     |else|
+      SETHL [PICK[#compute PICK0 - 2]]
+      T6530:PRINTAT 7,5 " [COLOR[COLOR:[HL]]][PICK[#compute PICK0 - 2 ]] [COLOR[COLOR:NORMAL]]"
+      #set FLIPCOUNT [#compute FLIPCOUNT + 1]
+    ]
+    [#if [#emptyv PICK[#compute PICK0 - 1]]
+     |then|
+      T6530:PRINTAT 7,6 " [COLOR[COLOR:NORMAL]]   [COLOR[COLOR:NORMAL]]"
+     |else|
+      SETHL [PICK[#compute PICK0 - 1]]
+      T6530:PRINTAT 7,6 " [COLOR[COLOR:[HL]]][PICK[#compute PICK0 - 1 ]] [COLOR[COLOR:NORMAL]]"
+      #set FLIPCOUNT [#compute FLIPCOUNT + 1]
+    ]
+    [#if [#emptyv PICK[PICK0]]
+     |then|
+      T6530:PRINTAT 7,7 " [COLOR[COLOR:NORMAL]]   [COLOR[COLOR:NORMAL]]"
+     |else|
+      SETHL [PICK[PICK0]]
+      T6530:PRINTAT 7,7 " [COLOR[COLOR:[HL]]][PICK[PICK0]] [COLOR[COLOR:NORMAL]]"
+      #set FLIPCOUNT [#compute FLIPCOUNT + 1]
+    ]
+  ]
+]
+================================================================================
+{                                                                             }
+[#def FLIP3 routine
+ |body|
+  #set FLIPCOUNT 3
+  [#if (DECK0 > 0)
+   |then|
+    #set PICK0 [#compute PICK0 + 3]
+    #set TEMP [#compute PICK0 - 2]
+    #setv PICK[TEMP] DECK[DECK0]
+    SETHL [PICK[TEMP]]
+    T6530:PRINTAT 7,5 " [COLOR[COLOR:[HL]]][PICK[TEMP]] [COLOR[COLOR:NORMAL]]"
+    #set DECK0 [#compute DECK0 - 1]
+    [#if (DECK0 > 0)
+     |then|
+      #set TEMP [#compute PICK0 - 1]
+      #setv PICK[TEMP] DECK[DECK0]
+      SETHL [PICK[TEMP]]
+      T6530:PRINTAT 7,6 " [COLOR[COLOR:[HL]]][PICK[TEMP]] [COLOR[COLOR:NORMAL]]"
+      #set DECK0 [#compute DECK0 - 1]
+      [#if (DECK0 > 0)
+       |then|
+        #setv PICK[PICK0] DECK[DECK0]
+        SETHL [PICK[PICK0]]
+        T6530:PRINTAT 7,7 " [COLOR[COLOR:[HL]]][PICK[PICK0]] [COLOR[COLOR:NORMAL]]"
+        #set DECK0 [#compute DECK0 - 1]
+        [#if (DECK0 = 0)
+         |then|
+          T6530:PRINTAT 2,5 "[COLOR[COLOR:NORMAL]]   [COLOR[COLOR:NORMAL]]"
+        ]
+       |else|
+        T6530:PRINTAT 2,5 "[COLOR[COLOR:NORMAL]]   [COLOR[COLOR:NORMAL]]"
+        T6530:PRINTAT 7,7 " [COLOR[COLOR:NORMAL]]    [COLOR[COLOR:NORMAL]]"
+        #set PICK[PICK0]
+        #set FLIPCOUNT 2
+      ]
+     |else|
+      T6530:PRINTAT 2,5 "[COLOR[COLOR:NORMAL]]   [COLOR[COLOR:NORMAL]]"
+      T6530:PRINTAT 7,6 " [COLOR[COLOR:NORMAL]]    [COLOR[COLOR:NORMAL]]"
+      T6530:PRINTAT 7,7 " [COLOR[COLOR:NORMAL]]    [COLOR[COLOR:NORMAL]]"
+      #set PICK[PICK0]
+      #set PICK[#compute PICK0 - 1]
+      #set FLIPCOUNT 1
+    ]
+   |else|
+    [#if (pick0 > 0)
+     |then|
+      T6530:PRINTAT 2,5 "[COLOR[COLOR:BACK]]## [COLOR[COLOR:NORMAL]]"
+      T6530:PRINTAT 7,5 " [COLOR[COLOR:NORMAL]]    [COLOR[COLOR:NORMAL]]"
+      T6530:PRINTAT 7,6 " [COLOR[COLOR:NORMAL]]    [COLOR[COLOR:NORMAL]]"
+      T6530:PRINTAT 7,7 " [COLOR[COLOR:NORMAL]]    [COLOR[COLOR:NORMAL]]"
+      #set FLIPCOUNT 0
+      #set DECK0 0
+      #set TEMP 1
+      [#loop
+       |while|
+        (PICK0 > 0)
+       |do|
+        [#if not [#emptyv PICK[PICK0]]
+         |then|
+          #set DECK0 [#compute DECK0 + 1]
+          #setv DECK[DECK0] PICK[PICK0]
+          #set PICK[PICK0]
+        ]
+        #set PICK0 [#compute PICK0 - 1]
+      ]
+     |else|
+      T6530:PRINTAT 2,5 "[COLOR[COLOR:NORMAL]]   [COLOR[COLOR:NORMAL]]"
+      T6530:PRINTAT 7,5 " [COLOR[COLOR:NORMAL]]    [COLOR[COLOR:NORMAL]]"
+      T6530:PRINTAT 7,6 " [COLOR[COLOR:NORMAL]]    [COLOR[COLOR:NORMAL]]"
+      T6530:PRINTAT 7,7 " [COLOR[COLOR:NORMAL]]    [COLOR[COLOR:NORMAL]]"
+    ]
+  ]
+]
+===============================================================================
+{ This is a Simulated Tacl for 'emergency' use only.                          }
+[#def SIMTACL routine
+ |body|
+  #set TACLDONE 0
+  #OUTPUT [T6530:CLS]
+  [#loop
+   |do|
+    #inputv /current,historyv "> "/ TACLCMD "[#mysystem] "
+    [#if [#inputeof]
+     |then|
+      #set TACLDONE -1
+     |else|
+      [TACLCMD]
+    ]
+   |until|
+    TACLDONE
+  ]
+  REDRAW
+]
+================================================================================
+T6530:PRINTAT 30,2 "[COLOR[COLOR:INSTX]] S O L I T A I R E [COLOR[COLOR:NORMAL]]"
+NEWGAME
+T6530:PRINTAT 1,4  "[COLOR[COLOR:INSTX]]"
+T6530:PRINTAT 1,3 "[COLOR[COLOR:ERROR]][T6530:CLLINE]"
+T6530:PRINTAT 28,3 "**  S H U F F L I N G  **"
+SHUFFLE
+T6530:PRINTAT 1,3 "[T6530:clline]"
+DEAL
+PLAY
+#UNFRAME
