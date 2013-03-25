@@ -10,4 +10,6 @@ I am now going to update this program to use the Graphics library to have a Grap
 
 (See Python_Solitaire_Graphical_v1 once I get started)
 
+(test update via update on PC, then commited to GIT)
+
 Jeff
